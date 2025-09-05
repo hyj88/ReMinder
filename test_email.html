@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>测试邮件发送</title>
+</head>
+<body>
+    <h1>测试邮件发送</h1>
+    <button onclick="sendTestEmail()">发送测试邮件</button>
+    <div id="result"></div>
+
+    <script>
+        async function sendTestEmail() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '正在发送...';
+            
+            try {
+                const response = await fetch('/api/reminders/check-and-email', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-User-Logged-In': 'true'
+                    }
+                });
+                
+                const data = await response.json();
+                resultDiv.innerHTML = `<p>响应状态: ${response.status}</p><p>响应数据: ${JSON.stringify(data)}</p>`;
+            } catch (error) {
+                resultDiv.innerHTML = `<p>错误: ${error.message}</p>`;
+            }
+        }
+    </script>
+</body>
+</html>

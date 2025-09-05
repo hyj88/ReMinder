@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>测试表单元素</title>
+</head>
+<body>
+    <script>
+        // 模拟检查表单元素是否存在
+        setTimeout(() => {
+            const elements = [
+                'smtpServer',
+                'smtpPort', 
+                'senderEmail',
+                'senderPassword',
+                'recipientEmail'
+            ];
+            
+            console.log("检查邮箱配置表单元素:");
+            elements.forEach(id => {
+                const element = document.getElementById(id);
+                console.log(`${id}: ${element ? '存在' : '不存在'}`);
+                if (element) {
+                    console.log(`  值: "${element.value}"`);
+                }
+            });
+        }, 1000);
+    </script>
+    
+    <!-- 模拟邮箱配置表单 -->
+    <form id="email-config-form">
+        <input type="text" id="smtpServer" value="smtp.gmail.com">
+        <input type="text" id="smtpPort" value="587">
+        <input type="email" id="senderEmail" value="test@example.com">
+        <input type="password" id="senderPassword" value="testpassword">
+        <input type="email" id="recipientEmail" value="recipient@example.com">
+    </form>
+</body>
+</html>
