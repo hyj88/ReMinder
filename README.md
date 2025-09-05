@@ -1,4 +1,7 @@
 [README.md](https://github.com/user-attachments/files/22168445/README.md)
+
+<img width="2830" height="1254" alt="image" src="https://github.com/user-attachments/assets/8952ab1f-c4e4-4787-90a9-c576a4364877" />
+
 # Reminder Application (提醒应用)
 
 A Python and JavaScript-based reminder application with email notifications.
