@@ -14,6 +14,13 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import datetime
 from functools import wraps
+import time
+import hmac
+import hashlib
+import base64
+import urllib.parse
+import requests
+
 
 app = Flask(__name__, static_folder='.')
 
@@ -104,7 +111,21 @@ def init_db():
                     "INSERT INTO settings (key, value) VALUES (?, ?)",
                     (key, '')
                 )
-        # --- 邮箱配置初始化结束 ---
+        
+        # --- 检查并初始化钉钉配置 ---
+        dingtalk_config_keys = [
+            'dingtalk_webhook', 'dingtalk_secret'
+        ]
+        for key in dingtalk_config_keys:
+            cursor.execute("SELECT value FROM settings WHERE key = ?", (key,))
+            row = cursor.fetchone()
+            if not row:
+                # 设置默认空值
+                cursor.execute(
+                    "INSERT INTO settings (key, value) VALUES (?, ?)",
+                    (key, '')
+                )
+        # --- 配置初始化结束 ---
         
         conn.commit()
 
@@ -146,10 +167,21 @@ def send_reminder_email(upcoming_reminders):
             body += f"- {reminder['name']} (类型: {reminder['type']}, 到期日期: {reminder['end_date']})\n"
         body += "\n请登录系统查看详情。\n\n谢谢！"
 
-        # 4. 创建 MIMEText 对象
+        # 4. 创建 MIMEText 对象并处理多个收件人
+        recipient_string = config.get('recipient_email', '')
+        if not recipient_string:
+            logging.warning("邮件收件人未配置，无法发送邮件。")
+            return False
+            
+        # 将逗号分隔的字符串拆分为列表，并去除多余的空格
+        recipient_list = [email.strip() for email in recipient_string.split(',') if email.strip()]
+        if not recipient_list:
+            logging.warning("邮件收件人列表为空，无法发送邮件。")
+            return False
+
         message = MIMEMultipart()
         message["From"] = config['sender_email']
-        message["To"] = config['recipient_email']
+        message["To"] = ", ".join(recipient_list) # 在邮件头中显示所有收件人
         message["Subject"] = subject
         message.attach(MIMEText(body, "plain", 'utf-8')) # 指定编码
 
@@ -165,16 +197,18 @@ def send_reminder_email(upcoming_reminders):
             with smtplib.SMTP_SSL(config['smtp_server'], port, context=context) as server:
                 server.login(config['sender_email'], config['sender_password'])
                 text = message.as_string()
-                server.sendmail(config['sender_email'], config['recipient_email'], text)
+                # sendmail 的第二个参数需要一个收件人列表
+                server.sendmail(config['sender_email'], recipient_list, text)
         else:
             # 使用普通 SMTP 连接并启动 TLS（适用于端口 587 等）
             with smtplib.SMTP(config['smtp_server'], port) as server:
                 server.starttls(context=context) # 启用 TLS 加密
                 server.login(config['sender_email'], config['sender_password'])
                 text = message.as_string()
-                server.sendmail(config['sender_email'], config['recipient_email'], text)
+                # sendmail 的第二个参数需要一个收件人列表
+                server.sendmail(config['sender_email'], recipient_list, text)
 
-        msg = f"邮件已成功发送至 {config['recipient_email']}"
+        msg = f"邮件已成功发送至 {', '.join(recipient_list)}"
         print(msg)
         logging.info(msg)
         return True # 表示发送成功
@@ -235,6 +269,114 @@ def check_upcoming_reminders_for_email():
         traceback.print_exc()
         return []
 
+
+def send_dingtalk_message(message):
+    """
+    发送钉钉消息
+    :param message: 要发送的消息内容
+    """
+    try:
+        # 1. 从数据库获取钉钉配置
+        config = {}
+        with sqlite3.connect(DATABASE) as conn:
+            cursor = conn.cursor()
+            for key in ['dingtalk_webhook', 'dingtalk_secret']:
+                cursor.execute("SELECT value FROM settings WHERE key = ?", (key,))
+                row = cursor.fetchone()
+                config[key] = row[0] if row else ''
+
+        webhook_url = config.get('dingtalk_webhook')
+        secret = config.get('dingtalk_secret')
+
+        if not webhook_url:
+            logging.warning("钉钉 Webhook URL 未配置，无法发送消息。")
+            return False
+
+        # 2. 如果有密钥，进行签名
+        if secret:
+            timestamp = str(round(time.time() * 1000))
+            secret_enc = secret.encode('utf-8')
+            string_to_sign = '{}\n{}'.format(timestamp, secret)
+            string_to_sign_enc = string_to_sign.encode('utf-8')
+            hmac_code = hmac.new(secret_enc, string_to_sign_enc, digestmod=hashlib.sha256).digest()
+            sign = urllib.parse.quote_plus(base64.b64encode(hmac_code))
+            final_webhook_url = f"{webhook_url}&timestamp={timestamp}&sign={sign}"
+        else:
+            final_webhook_url = webhook_url
+
+        # 3. 准备消息内容 (Markdown 格式)
+        payload = {
+            "msgtype": "markdown",
+            "markdown": {
+                "title": "证照到期提醒",
+                "text": message
+            }
+        }
+
+        # 4. 发送请求
+        headers = {'Content-Type': 'application/json'}
+        response = requests.post(final_webhook_url, data=json.dumps(payload), headers=headers)
+        response.raise_for_status()  # 如果请求失败，会抛出 HTTPError
+
+        result = response.json()
+        if result.get("errcode") == 0:
+            logging.info("钉钉消息发送成功。")
+            return True
+        else:
+            logging.error(f"钉钉消息发送失败: {result.get('errmsg')}")
+            return False
+
+    except Exception as e:
+        logging.error(f"发送钉钉消息时发生错误: {e}")
+        traceback.print_exc()
+        return False
+
+def check_upcoming_reminders_for_dingtalk():
+    """
+    检查即将到期的项目并发送钉钉消息
+    """
+    try:
+        with sqlite3.connect(DATABASE) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM reminders ORDER BY actual_reminder_date')
+            rows = cursor.fetchall()
+
+        reminders = [dict(row) for row in rows]
+
+        today = datetime.date.today()
+        upcoming_reminders = []
+
+        for reminder in reminders:
+            try:
+                actual_reminder_date = datetime.datetime.strptime(reminder['actual_reminder_date'], "%Y-%m-%d").date()
+                end_date = datetime.datetime.strptime(reminder['end_date'], "%Y-%m-%d").date()
+
+                if actual_reminder_date <= today and end_date >= today:
+                    upcoming_reminders.append(reminder)
+            except (ValueError, TypeError) as e:
+                logging.warning(f"处理提醒项 ID {reminder.get('id', 'unknown')} 的日期时出错: {e}")
+
+        if upcoming_reminders:
+            message = "### 证照即将到期提醒\n\n"
+            for reminder in upcoming_reminders:
+                message += f"- **{reminder['name']}** (类型: {reminder['type']}, 到期日期: {reminder['end_date']})\n"
+            
+            message += "\n请登录系统查看详情。"
+            
+            success = send_dingtalk_message(message)
+            if success:
+                print("已发送钉钉提醒消息。")
+            else:
+                print("钉钉提醒消息发送失败。")
+            return upcoming_reminders
+        else:
+            print("当前没有即将到期的项目。")
+            return []
+    except Exception as e:
+        logging.error(f"检查即将到期的项目以发送钉钉消息时发生错误: {e}")
+        traceback.print_exc()
+        return []
 
 # --- API Routes ---
 
@@ -576,6 +718,27 @@ def get_email_settings():
         logging.error(f"获取邮箱配置失败: {e}")
         return jsonify({'error': '获取邮箱配置失败'}), 500
 
+
+@app.route('/api/settings/dingtalk', methods=['GET'])
+@require_login
+def get_dingtalk_settings():
+    """获取钉钉配置"""
+    try:
+        config = {}
+        with sqlite3.connect(DATABASE) as conn:
+            cursor = conn.cursor()
+            for key in ['dingtalk_webhook', 'dingtalk_secret']:
+                cursor.execute("SELECT value FROM settings WHERE key = ?", (key,))
+                row = cursor.fetchone()
+                config[key] = row[0] if row else ''
+        # 不返回密钥
+        config.pop('dingtalk_secret', None)
+        return jsonify(config), 200
+    except Exception as e:
+        logging.error(f"获取钉钉配置失败: {e}")
+        return jsonify({'error': '获取钉钉配置失败'}), 500
+
+
 @app.route('/api/settings/email', methods=['POST'])
 @require_login
 def update_email_settings():
@@ -619,6 +782,63 @@ def update_email_settings():
         logging.error(f"更新邮箱配置失败: {e}")
         return jsonify({'error': '更新邮箱配置失败'}), 500
 
+
+@app.route('/api/settings/dingtalk', methods=['POST'])
+@require_login
+def update_dingtalk_settings():
+    """更新钉钉配置"""
+    try:
+        data = request.get_json()
+        print(f"收到钉钉配置更新请求，数据: {data}")  # 添加调试信息
+        
+        # 不再要求所有字段都必须提供，只更新提供的字段
+        allowed_fields = ['dingtalk_webhook', 'dingtalk_secret']
+        fields_to_update = {}
+        
+        # 筛选出允许更新的字段
+        for key in allowed_fields:
+            if key in data:
+                fields_to_update[key] = data[key]
+        
+        print(f"需要更新的字段: {fields_to_update}")  # 添加调试信息
+        
+        # 如果没有提供任何字段，则返回错误
+        if not fields_to_update:
+            error_msg = '至少需要提供一个字段进行更新'
+            print(f"错误: {error_msg}")  # 添加调试信息
+            return jsonify({'error': error_msg}), 400
+
+        with sqlite3.connect(DATABASE) as conn:
+            cursor = conn.cursor()
+            # 更新提供的字段
+            for key, value in fields_to_update.items():
+                # 特殊处理密钥和webhook URL：允许空字符串更新
+                if key in ['dingtalk_secret', 'dingtalk_webhook']:
+                    print(f"更新字段 {key} 为值: '{value}'")  # 添加调试信息
+                    cursor.execute(
+                        "UPDATE settings SET value = ? WHERE key = ?",
+                        (value, key)
+                    )
+                else:
+                    # 对于其他字段，只有当值不是None且不是空字符串时才更新
+                    if value is not None and value != "":
+                        print(f"更新字段 {key} 为值: '{value}'")  # 添加调试信息
+                        cursor.execute(
+                            "UPDATE settings SET value = ? WHERE key = ?",
+                            (value, key)
+                        )
+            conn.commit()
+        success_msg = '钉钉配置更新成功'
+        print(success_msg)  # 添加调试信息
+        return jsonify({'message': success_msg}), 200
+    except Exception as e:
+        error_msg = f"更新钉钉配置失败: {e}"
+        logging.error(error_msg)
+        print(error_msg)  # 添加调试信息
+        import traceback
+        traceback.print_exc()  # 添加调试信息
+        return jsonify({'error': '更新钉钉配置失败'}), 500
+
 @app.route('/api/reminders/check-and-email', methods=['POST'])
 @require_login
 def api_check_and_email_reminders():
@@ -638,6 +858,36 @@ def api_check_and_email_reminders():
         traceback.print_exc()
         logging.error(f"通过 API 检查并发送邮件时失败: {e}")
         return jsonify({'error': '检查并发送邮件失败'}), 500
+
+
+@app.route('/api/reminders/check-and-dingtalk', methods=['POST'])
+@require_login
+def api_check_and_dingtalk_reminders():
+    """API 端点：检查即将到期项目并发送钉钉消息"""
+    try:
+        print("收到检查并发送钉钉消息的请求")
+        print("开始调用 check_upcoming_reminders_for_dingtalk 函数")
+        import traceback
+        try:
+            upcoming_list = check_upcoming_reminders_for_dingtalk()
+        except Exception as e:
+            print(f"调用 check_upcoming_reminders_for_dingtalk 时发生错误: {e}")
+            traceback.print_exc()
+            raise e
+        print(f"check_upcoming_reminders_for_dingtalk 函数返回结果: {upcoming_list}")
+        count = len(upcoming_list)
+        print(f"检查完成，发现 {count} 个即将到期项目")
+        if count > 0:
+            return jsonify({'message': f'检查完成，发现 {count} 个即将到期项目，并已尝试发送钉钉消息。'}), 200
+        else:
+            return jsonify({'message': '检查完成，当前没有即将到期的项目。'}), 200
+    except Exception as e:
+        error_msg = f"通过 API 检查并发送钉钉消息时失败: {e}"
+        print(error_msg)
+        import traceback
+        traceback.print_exc()
+        logging.error(error_msg)
+        return jsonify({'error': '检查并发送钉钉消息失败'}), 500
 
 @app.route('/api/auth/login', methods=['POST'])
 def login():

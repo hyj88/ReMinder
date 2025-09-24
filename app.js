@@ -39,6 +39,13 @@ const emailConfigForm = document.getElementById('email-config-form');
 const sendTestEmailBtn = document.getElementById('send-test-email-btn');
 const checkAndSendEmailBtn = document.getElementById('check-and-send-email-btn');
 const cancelEmailConfigBtn = document.getElementById('cancel-email-config');
+
+const showDingtalkConfigBtn = document.getElementById('show-dingtalk-config-btn');
+const dingtalkConfigContainer = document.getElementById('dingtalk-config-container');
+const dingtalkConfigForm = document.getElementById('dingtalk-config-form');
+const sendTestDingtalkBtn = document.getElementById('send-test-dingtalk-btn');
+const checkAndSendDingtalkBtn = document.getElementById('check-and-send-dingtalk-btn');
+const cancelDingtalkConfigBtn = document.getElementById('cancel-dingtalk-config');
 // --- 新增结束 ---
 
 // --- 常量 ---
@@ -65,6 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
         setupEventListeners(); // 设置事件监听器
         setupEmailEventListeners(); // <-- 新增
         fetchEmailConfig(); // <-- 新增：登录后获取邮箱配置
+        setupAutoRefresh(); // <-- 新增：设置自动刷新
         // checkAndAlertUpcomingReminders(); // 可以在 loadReminders 回调中调用
     } else {
         showLogin(); // 显示登录界面
@@ -72,63 +80,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
+// 存储已绑定的事件监听器，防止重复绑定
+const boundEventListeners = new Set();
+
 // --- 事件监听器 ---
 function setupEventListeners() {
-    form.addEventListener('submit', handleFormSubmit);
-    cancelEditBtn.addEventListener('click', cancelEdit);
-    showFormBtn.addEventListener('click', () => {
-        showForm();
-        if (isEditing) {
-            cancelEdit();
-        }
-    });
-
-    // --- 新增：密码管理和邮箱配置事件监听 ---
-    if (showChangePasswordBtn) {
-        showChangePasswordBtn.addEventListener('click', showChangePasswordForm);
-    }
-    if (cancelChangePasswordBtn) {
-        cancelChangePasswordBtn.addEventListener('click', hideChangePasswordForm);
-    }
-    if (showEmailConfigBtn) {
-        showEmailConfigBtn.addEventListener('click', showEmailConfigForm);
-    }
-    if (cancelEmailConfigBtn) {
-        cancelEmailConfigBtn.addEventListener('click', hideEmailConfigForm);
-    }
-    // --- 新增结束 ---
-
-    // --- 为导出 CSV 按钮添加事件监听 ---
-    if (exportCsvBtn) {
-        exportCsvBtn.addEventListener('click', exportRemindersToCSV);
-    }
-    // --- 新增：为导入 CSV 按钮添加事件监听 ---
-    if (importCsvBtn && importCsvFileInput) {
-        importCsvBtn.addEventListener('click', () => importRemindersFromCSV(importCsvFileInput));
-    }
-    // --- 新增：登录相关按钮事件监听 ---
-    if (logoutBtn) {
-        logoutBtn.addEventListener('click', handleLogout);
-    }
-    // --- 新增结束 ---
+    // 清理之前可能绑定的事件监听器
+    cleanupEventListeners();
     
-    // --- 新增：邮箱配置和密码管理相关表单事件监听 ---
-    // 注意：按钮点击已通过 data-bs-toggle 处理，只需监听表单提交
-    if (emailConfigForm) {
-        emailConfigForm.addEventListener('submit', handleSaveEmailConfig);
-    }
-    if (changePasswordForm) {
-        changePasswordForm.addEventListener('submit', handleChangePassword);
-    }
-    // 为邮箱配置页面的按钮添加事件监听器
-    if (sendTestEmailBtn) {
-        sendTestEmailBtn.addEventListener('click', handleSendTestEmail);
-    }
-    if (checkAndSendEmailBtn) {
-        checkAndSendEmailBtn.addEventListener('click', handleCheckAndSendEmail);
-    }
-    // --- 新增结束 ---
-
+    // 为表单元素添加事件监听器（这些不会重复创建，所以可以安全添加）
     document.getElementById('endDate').addEventListener('change', calculateActualReminderDate);
     document.getElementById('advanceDays').addEventListener('input', calculateActualReminderDate);
     
@@ -141,6 +101,74 @@ function setupEventListeners() {
             renewPeriodGroup.style.display = this.checked ? 'block' : 'none';
         });
     }
+    
+    // 为动态创建的按钮添加事件监听器
+    addEventListenerOnce(form, 'submit', handleFormSubmit);
+    addEventListenerOnce(cancelEditBtn, 'click', cancelEdit);
+    
+    addEventListenerOnce(showFormBtn, 'click', () => {
+        showForm();
+        if (isEditing) {
+            cancelEdit();
+        }
+    });
+
+    // --- 密码管理和邮箱配置事件监听 ---
+    addEventListenerOnce(showChangePasswordBtn, 'click', showChangePasswordForm);
+    addEventListenerOnce(cancelChangePasswordBtn, 'click', hideChangePasswordForm);
+    addEventListenerOnce(showEmailConfigBtn, 'click', showEmailConfigForm);
+    addEventListenerOnce(cancelEmailConfigBtn, 'click', hideEmailConfigForm);
+    addEventListenerOnce(showDingtalkConfigBtn, 'click', showDingtalkConfigForm);
+    addEventListenerOnce(cancelDingtalkConfigBtn, 'click', hideDingtalkConfigForm);
+
+    // --- CSV 导入/导出事件监听 ---
+    addEventListenerOnce(exportCsvBtn, 'click', exportRemindersToCSV);
+    if (importCsvBtn && importCsvFileInput) {
+        addEventListenerOnce(importCsvBtn, 'click', () => importRemindersFromCSV(importCsvFileInput));
+    }
+
+    // --- 登录相关按钮事件监听 ---
+    addEventListenerOnce(logoutBtn, 'click', handleLogout);
+    
+    // --- 邮箱配置和密码管理相关表单事件监听 ---
+    addEventListenerOnce(emailConfigForm, 'submit', handleSaveEmailConfig);
+    addEventListenerOnce(dingtalkConfigForm, 'submit', handleSaveDingtalkConfig);
+    addEventListenerOnce(changePasswordForm, 'submit', handleChangePassword);
+    
+    // --- 邮件发送相关按钮事件监听 ---
+    addEventListenerOnce(sendTestEmailBtn, 'click', handleSendTestEmail);
+    addEventListenerOnce(sendTestDingtalkBtn, 'click', handleSendTestDingtalk);
+    
+    // --- 提醒发送相关按钮事件监听 ---
+    addEventListenerOnce(checkAndSendEmailBtn, 'click', handleCheckAndSendEmail);
+    addEventListenerOnce(checkAndSendDingtalkBtn, 'click', handleCheckAndSendDingtalk);
+    
+    // --- 自动续期按钮事件监听 ---
+    const autoRenewBtn = document.getElementById('auto-renew-btn');
+    addEventListenerOnce(autoRenewBtn, 'click', handleAutoRenew);
+}
+
+/**
+ * 添加事件监听器，避免重复绑定
+ * @param {Element} element - 要添加监听器的元素
+ * @param {string} event - 事件名称
+ * @param {Function} handler - 事件处理函数
+ */
+function addEventListenerOnce(element, event, handler) {
+    if (!element) return;
+    
+    const key = `${element.id || element.tagName}-${event}`;
+    if (!boundEventListeners.has(key)) {
+        element.addEventListener(event, handler);
+        boundEventListeners.add(key);
+    }
+}
+
+/**
+ * 清理事件监听器
+ */
+function cleanupEventListeners() {
+    boundEventListeners.clear();
 }
 
 function showForm() {
@@ -166,8 +194,10 @@ function showChangePasswordForm() {
     // 隐藏其他表单
     formContainer.style.display = 'none';
     emailConfigContainer.style.display = 'none';
+    dingtalkConfigContainer.style.display = 'none';
     showFormBtn.style.display = 'inline-block';
     showEmailConfigBtn.style.display = 'inline-block';
+    showDingtalkConfigBtn.style.display = 'inline-block';
     changePasswordContainer.scrollIntoView({ behavior: 'smooth' });
 }
 
@@ -183,8 +213,10 @@ function showEmailConfigForm() {
     // 隐藏其他表单
     formContainer.style.display = 'none';
     changePasswordContainer.style.display = 'none';
+    dingtalkConfigContainer.style.display = 'none';
     showFormBtn.style.display = 'inline-block';
     showChangePasswordBtn.style.display = 'inline-block';
+    showDingtalkConfigBtn.style.display = 'inline-block';
     emailConfigContainer.scrollIntoView({ behavior: 'smooth' });
 }
 
@@ -193,6 +225,30 @@ function hideEmailConfigForm() {
     showEmailConfigBtn.style.display = 'inline-block';
     // 注意：通常不清空邮箱配置表单，因为用户可能只是想临时关闭
     // emailConfigForm.reset(); 
+}
+
+function showDingtalkConfigForm() {
+    dingtalkConfigContainer.style.display = 'block';
+    showDingtalkConfigBtn.style.display = 'none';
+    // 隐藏其他表单
+    formContainer.style.display = 'none';
+    changePasswordContainer.style.display = 'none';
+    emailConfigContainer.style.display = 'none';
+    showFormBtn.style.display = 'inline-block';
+    showChangePasswordBtn.style.display = 'inline-block';
+    showEmailConfigBtn.style.display = 'inline-block';
+    
+    // 获取并显示最新的钉钉配置
+    fetchDingtalkConfig();
+    
+    dingtalkConfigContainer.scrollIntoView({ behavior: 'smooth' });
+}
+
+function hideDingtalkConfigForm() {
+    dingtalkConfigContainer.style.display = 'none';
+    showDingtalkConfigBtn.style.display = 'inline-block';
+    // 注意：通常不清空钉钉配置表单，因为用户可能只是想临时关闭
+    // dingtalkConfigForm.reset(); 
 }
 // --- 新增结束 ---
 
@@ -545,9 +601,6 @@ function checkAndAlertUpcomingReminders(reminders) {
 
 // 渲染提醒项列表和状态统计
 function renderReminders(reminders) {
-    // 检查并处理自动续期
-    checkAndHandleAutoRenew(reminders);
-    
     // 更新状态统计
     updateStats(reminders);
 
@@ -645,23 +698,46 @@ function renderReminders(reminders) {
 }
 
 /**
- * 检查并处理自动续期
- * @param {Array} reminders - 提醒项列表
+ * 检查并处理自动续期（仅在用户手动触发时执行）
  */
-function checkAndHandleAutoRenew(reminders) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    reminders.forEach(reminder => {
-        // 检查是否启用了自动续期并且项目已过期
-        if (reminder.auto_renew && (reminder.auto_renew === 1 || reminder.auto_renew === true)) {
-            const endDate = new Date(reminder.end_date);
-            if (endDate < today) {
-                // 项目已过期，需要续期
-                createRenewedReminder(reminder);
+async function handleAutoRenew() {
+    try {
+        // 从后端获取所有提醒项
+        const reminders = await fetchReminders();
+        
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        // 找出需要续期的项目
+        const remindersToRenew = reminders.filter(reminder => {
+            // 检查是否启用了自动续期并且项目已过期
+            if (reminder.auto_renew && (reminder.auto_renew === 1 || reminder.auto_renew === true)) {
+                const endDate = new Date(reminder.end_date);
+                return endDate < today;
             }
+            return false;
+        });
+        
+        // 如果没有需要续期的项目，直接返回
+        if (remindersToRenew.length === 0) {
+            console.log('没有需要自动续期的项目');
+            return;
         }
-    });
+        
+        console.log(`找到 ${remindersToRenew.length} 个需要续期的项目`);
+        
+        // 逐个处理续期
+        for (const reminder of remindersToRenew) {
+            await createRenewedReminder(reminder);
+        }
+        
+        // 续期完成后重新加载列表
+        loadReminders();
+        alert(`自动续期完成，共处理了 ${remindersToRenew.length} 个项目`);
+    } catch (error) {
+        console.error('处理自动续期时出错:', error);
+        alert('处理自动续期时出错: ' + error.message);
+    }
 }
 
 /**
@@ -669,6 +745,21 @@ function checkAndHandleAutoRenew(reminders) {
  * @param {Object} originalReminder - 原始提醒项
  */
 async function createRenewedReminder(originalReminder) {
+    // 检查是否已经存在相同名称且日期相近的续期项目，避免重复创建
+    const reminders = await fetchReminders();
+    const existingRenewed = reminders.find(r => 
+        r.name === originalReminder.name && 
+        r.auto_renew === originalReminder.auto_renew &&
+        // 检查是否在原项目结束日期之后的一年内已经存在续期项目
+        new Date(r.start_date) > new Date(originalReminder.end_date) &&
+        new Date(r.start_date) < new Date(new Date(originalReminder.end_date).setFullYear(new Date(originalReminder.end_date).getFullYear() + 1))
+    );
+    
+    if (existingRenewed) {
+        console.log(`项目 "${originalReminder.name}" 已经存在续期项目，跳过创建`);
+        return;
+    }
+    
     // 计算新的开始日期和结束日期
     const originalEndDate = new Date(originalReminder.end_date);
     const newStartDate = new Date(originalEndDate);
@@ -735,11 +826,10 @@ async function createRenewedReminder(originalReminder) {
 
         const createdReminder = await response.json();
         console.log('自动续期成功:', createdReminder);
-        // 重新加载列表以显示新创建的项目
-        loadReminders();
+        return createdReminder;
     } catch (error) {
         console.error('自动续期失败:', error);
-        // 不中断用户操作，只在控制台记录错误
+        throw error; // 重新抛出错误，让调用者处理
     }
 }
 
@@ -1093,6 +1183,40 @@ async function fetchEmailConfig() {
     }
 }
 
+
+// 获取钉钉配置
+async function fetchDingtalkConfig() {
+    showLoadingSpinner();
+    try {
+        const response = await fetch(`${API_BASE_URL}/settings/dingtalk`, getFetchOptions());
+        console.log('获取钉钉配置的响应:', response); // 添加调试信息
+        if (!response.ok) {
+            if (response.status === 401) {
+                handleSessionExpired();
+                return;
+            }
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const config = await response.json();
+        console.log('从服务器获取的钉钉配置:', config); // 添加调试信息
+
+        // 填充表单
+        if (document.getElementById('dingtalkWebhook')) {
+            document.getElementById('dingtalkWebhook').value = config.dingtalk_webhook || '';
+            console.log('设置钉钉Webhook输入框的值:', config.dingtalk_webhook || ''); // 添加调试信息
+        }
+
+        // 密钥字段不返回，保持为空
+        console.log('钉钉配置获取完成'); // 添加调试信息
+
+    } catch (error) {
+        console.error('获取钉钉配置失败:', error);
+        alert('获取钉钉配置失败: ' + error.message);
+    } finally {
+        hideLoadingSpinner();
+    }
+}
+
 // 保存邮箱配置
 async function handleSaveEmailConfig(e) {
     e.preventDefault();
@@ -1115,12 +1239,8 @@ async function handleSaveEmailConfig(e) {
         // 调试信息：检查获取的配置数据
         console.log('获取的配置数据:', configData);
         
-        // 移除空字符串的字段（密码除外）
-        Object.keys(configData).forEach(key => {
-            if (key !== 'sender_password' && configData[key] === '') {
-                delete configData[key];
-            }
-        });
+        // 不再移除空字符串的字段，因为后端需要至少一个字段
+        // 确保至少发送一个字段
         
         // 调试信息：检查最终发送的配置数据
         console.log('最终发送的配置数据:', configData);
@@ -1152,6 +1272,78 @@ async function handleSaveEmailConfig(e) {
     }
 }
 
+
+// 保存钉钉配置
+async function handleSaveDingtalkConfig(e) {
+    e.preventDefault();
+    showLoadingSpinner();
+    try {
+        // 直接从表单元素获取值
+        const configData = {
+            dingtalk_webhook: document.getElementById('dingtalkWebhook').value
+        };
+        
+        // 只有当密钥字段有输入时才发送密钥
+        const secretValue = document.getElementById('dingtalkSecret').value;
+        if (secretValue && secretValue.trim() !== '') {
+            configData.dingtalk_secret = secretValue;
+        }
+
+        // 调试信息：检查获取的配置数据
+        console.log('获取的钉钉配置数据:', configData);
+        
+        // 不再移除空字符串的字段，因为后端需要至少一个字段
+        // 确保至少发送一个字段（webhook URL）
+        // 如果两个字段都为空，仍然发送 webhook 字段（空字符串）
+        
+        // 调试信息：检查最终发送的配置数据
+        console.log('最终发送的钉钉配置数据:', configData);
+
+        const fetchOptions = getFetchOptions({
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(configData)
+        });
+        
+        console.log('发送的请求选项:', fetchOptions);
+
+        const response = await fetch(`${API_BASE_URL}/settings/dingtalk`, fetchOptions);
+
+        console.log('收到的响应:', response);
+        
+        // 检查响应状态
+        if (!response.ok) {
+            if (response.status === 401) {
+                handleSessionExpired();
+                return;
+            }
+            
+            // 尝试解析错误响应
+            let errorData;
+            try {
+                errorData = await response.json();
+            } catch (parseError) {
+                // 如果JSON解析失败，使用文本内容
+                const errorText = await response.text();
+                errorData = { error: `HTTP ${response.status}: ${errorText || response.statusText}` };
+            }
+            
+            console.error('服务器返回错误:', errorData);
+            throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        alert(data.message || '钉钉配置保存成功');
+        console.log('钉钉配置保存响应:', data);
+
+    } catch (error) {
+        console.error('保存钉钉配置失败:', error);
+        alert('保存钉钉配置失败: ' + error.message);
+    } finally {
+        hideLoadingSpinner();
+    }
+}
+
 // 发送测试邮件
 async function handleSendTestEmail() {
      // 为了简单，我们直接调用后端检查并发送的 API，
@@ -1162,6 +1354,20 @@ async function handleSendTestEmail() {
      // 添加延迟以便用户能看到alert
      setTimeout(() => {
          handleCheckAndSendEmail(true); // 传递一个标志位表示是测试
+     }, 1000);
+}
+
+
+// 发送测试钉钉消息
+async function handleSendTestDingtalk() {
+     // 为了简单，我们直接调用后端检查并发送的 API，
+     // 但可以创建一个专门的测试钉钉消息 API
+     console.log('点击发送测试钉钉消息按钮');
+     alert('将发送一条包含当前配置信息的测试消息到钉钉。请检查群聊。');
+     
+     // 添加延迟以便用户能看到alert
+     setTimeout(() => {
+         handleCheckAndSendDingtalk(true); // 传递一个标志位表示是测试
      }, 1000);
 }
 
@@ -1186,31 +1392,119 @@ async function handleCheckAndSendEmail(isTest = false) {
         console.log('开始发送fetch请求');
         const response = await fetch(endpoint, fetchOptions);
         console.log('收到响应:', response);
-        console.log('邮件发送响应状态:', response.status);
-        console.log('邮件发送响应是否成功:', response.ok);
-
+        
         if (!response.ok) {
-            console.log('响应不成功');
             if (response.status === 401) {
                 handleSessionExpired();
                 return;
             }
-            const errorData = await response.json();
-            console.log('邮件发送错误数据:', errorData);
+            const errorData = await response.json().catch(() => ({})); // 防止解析错误
             throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
         }
-
+        
         const data = await response.json();
+        alert(data.message || '邮件发送操作完成');
         console.log('邮件发送响应数据:', data);
-        alert(data.message || '邮件发送请求已提交');
-
+        
     } catch (error) {
         console.error('检查并发送邮件失败:', error);
-        console.error('错误堆栈:', error.stack);
         alert('检查并发送邮件失败: ' + error.message);
     } finally {
         hideLoadingSpinner();
     }
 }
 
+
+// 检查并发送钉钉提醒消息
+async function handleCheckAndSendDingtalk(isTest = false) {
+    console.log('开始处理钉钉消息发送，isTest:', isTest);
+    showLoadingSpinner();
+    try {
+        // 可以在这里添加一个确认对话框
+        // if (!isTest && !confirm('确定要检查并发送即将到期的提醒消息到钉钉吗？')) return;
+
+        const endpoint = `${API_BASE_URL}/reminders/check-and-dingtalk`;
+        console.log('发送请求到:', endpoint);
+        
+        const fetchOptions = getFetchOptions({
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+            // 如果需要区分测试，可以发送一个 body: { isTest: true }
+        });
+        console.log('请求选项:', fetchOptions);
+        
+        console.log('开始发送fetch请求');
+        const response = await fetch(endpoint, fetchOptions);
+        console.log('收到响应:', response);
+        
+        if (!response.ok) {
+            if (response.status === 401) {
+                handleSessionExpired();
+                return;
+            }
+            const errorData = await response.json().catch(() => ({})); // 防止解析错误
+            throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        alert(data.message || '钉钉消息发送操作完成');
+        console.log('钉钉消息发送响应数据:', data);
+        
+    } catch (error) {
+        console.error('检查并发送钉钉消息失败:', error);
+        alert('检查并发送钉钉消息失败: ' + error.message);
+    } finally {
+        hideLoadingSpinner();
+    }
+}
+
+// --- 新增结束 ---
+
+// --- 新增：自动刷新功能 ---
+/**
+ * 设置每天早上8点自动刷新页面
+ */
+function setupAutoRefresh() {
+    // 计算到明天早上8点的时间间隔
+    function getTimeUntil8AM() {
+        const now = new Date();
+        const next8AM = new Date();
+        next8AM.setHours(8, 0, 0, 0); // 设置为今天的8:00:00.000
+        
+        // 如果当前时间已经过了今天的8点，则设置为明天的8点
+        if (now > next8AM) {
+            next8AM.setDate(next8AM.getDate() + 1);
+        }
+        
+        // 返回到下一个8点的毫秒数
+        return next8AM - now;
+    }
+    
+    // 刷新页面的函数
+    function refreshPage() {
+        console.log('执行每日自动刷新');
+        location.reload();
+    }
+    
+    // 设置第一次定时器
+    const timeUntil8AM = getTimeUntil8AM();
+    console.log(`下次自动刷新将在 ${timeUntil8AM / 1000 / 60 / 60} 小时后执行`);
+    
+    // 设置定时器到明天早上8点
+    setTimeout(() => {
+        // 执行刷新
+        refreshPage();
+        
+        // 设置后续每天的定时器（每24小时）
+        setInterval(refreshPage, 24 * 60 * 60 * 1000);
+    }, timeUntil8AM);
+}
+
+// 页面可见性变化时的处理函数
+document.addEventListener('visibilitychange', function() {
+    if (!document.hidden) {
+        // 页面变为可见时检查是否需要刷新
+        console.log('页面变为可见，检查是否需要自动刷新');
+    }
+});
 // --- 新增结束 ---

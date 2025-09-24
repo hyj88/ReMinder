@@ -209,10 +209,14 @@
                 
                 <!-- 右对齐按钮 -->
                 <div class="d-flex flex-wrap align-items-center">
+                    <!-- 自动续期按钮 -->
+                    <button id="auto-renew-btn" class="btn btn-success btn-sm mb-2 me-2"><i class="fas fa-sync"></i> 自动续期</button>
                     <!-- 密码管理按钮 -->
                     <button id="show-change-password-btn" class="btn btn-warning btn-sm mb-2 me-2"><i class="fas fa-key"></i> 密码管理</button>
                     <!-- 邮箱配置按钮 -->
                     <button id="show-email-config-btn" class="btn btn-primary btn-sm mb-2 me-2"><i class="fas fa-cog"></i> 邮箱配置</button>
+                    <!-- 钉钉配置按钮 -->
+                    <button id="show-dingtalk-config-btn" class="btn btn-info btn-sm mb-2 me-2"><i class="fas fa-cog"></i> 钉钉配置</button>
                     <!-- 退出登录按钮 -->
                     <button id="logout-btn" class="btn btn-outline-secondary btn-sm mb-2"><i class="fas fa-sign-out-alt"></i> 退出</button>
                 </div>
@@ -347,13 +351,47 @@
                             </div>
                             <div class="col-12 col-md-6">
                                 <label for="recipientEmail" class="form-label">收件人邮箱</label>
-                                <input type="email" class="form-control" id="recipientEmail" required>
+                                <input type="email" class="form-control" id="recipientEmail" required multiple>
+                                <div class="form-text">可填写多个邮箱，请使用英文逗号 (,) 分隔。</div>
                             </div>
                             <div class="col-12">
                                 <button type="submit" class="btn btn-primary">保存配置</button>
                                 <button type="button" class="btn btn-info" id="send-test-email-btn">发送测试邮件</button>
                                 <button type="button" class="btn btn-success" id="check-and-send-email-btn">检查并发送提醒邮件</button>
                                 <button type="button" class="btn btn-secondary" id="cancel-email-config">取消</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- 钉钉配置表单 (默认隐藏) -->
+            <div id="dingtalk-config-container" class="card mb-4 form-section" style="display: none;">
+                <div class="card-header">
+                    <span>钉钉配置</span>
+                </div>
+                <div class="card-body">
+                    <form id="dingtalk-config-form">
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label for="dingtalkWebhook" class="form-label">Webhook URL</label>
+                                <input type="text" class="form-control" id="dingtalkWebhook" placeholder="https://oapi.dingtalk.com/robot/send?access_token=XXXXXX" required>
+                                <div class="form-text">
+                                    在钉钉群聊中添加自定义机器人后获取Webhook URL。
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <label for="dingtalkSecret" class="form-label">安全设置 (可选)</label>
+                                <input type="password" class="form-control" id="dingtalkSecret" placeholder="留空则不修改">
+                                <div class="form-text">
+                                    如果机器人设置了加签安全，需要填写签名密钥。
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <button type="submit" class="btn btn-primary">保存配置</button>
+                                <button type="button" class="btn btn-info" id="send-test-dingtalk-btn">发送测试消息</button>
+                                <button type="button" class="btn btn-success" id="check-and-send-dingtalk-btn">检查并发送提醒消息</button>
+                                <button type="button" class="btn btn-secondary" id="cancel-dingtalk-config">取消</button>
                             </div>
                         </div>
                     </form>
