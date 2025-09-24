@@ -1,108 +1,153 @@
-# Reminder Application (提醒应用)
+# 证照到期提醒工具 / Certificate Expiry Reminder Tool
 
-A Python and JavaScript-based reminder application with email notifications.
+[English](#english-version)
 
-一个基于 Python 和 JavaScript 的提醒应用，支持邮件通知。
+---
 
-## Features (功能)
+这是一个简单而实用的 Web 应用，用于追踪和管理各类证照、资质或许可证的到期日，并通过电子邮件和钉钉机器人发送自动提醒。
 
-- Create and manage reminders (创建和管理提醒)
-- Email notifications for upcoming reminders (即将到来的提醒邮件通知)
-- Web-based interface for easy access (基于Web的界面，便于访问)
-- Docker support for easy deployment (支持Docker，便于部署)
+## 主要功能
 
-## Technologies Used (使用的技术)
+- **Web 操作界面**: 通过浏览器轻松添加、编辑、删除和查看所有提醒项目。
+- **自动提醒**: 根据您设定的提前天数，自动判断并发送到期提醒。
+- **多渠道通知**:
+    - **邮件**: 支持向多个收件人批量发送提醒邮件。
+    - **钉钉**: 支持使用加签密钥的钉钉群机器人发送提醒。
+- **数据管理**:
+    - 支持从 CSV 文件批量导入数据。
+    - 支持将所有数据导出为 CSV 文件，方便备份和迁移。
+- **安全与配置**:
+    - 提供简单的密码登录保护。
+    - 所有配置（邮箱、钉钉、密码）均可在 Web 界面上完成。
+- **Docker 支持**: 提供 Dockerfile，方便快速、跨平台地打包和部署。
 
-- Python 3
-- JavaScript
-- HTML/CSS
-- Docker
-- SQLite database (SQLite数据库)
+## 技术栈
 
-## Setup (设置)
+- **后端**: Python, Flask
+- **前端**: HTML, CSS, JavaScript, Bootstrap 5
+- **数据库**: SQLite
 
-### Prerequisites (先决条件)
+## 本地运行指南
 
-- Python 3.7 or higher (Python 3.7或更高版本)
-- Node.js (for any Node-based utilities) (用于基于Node的工具)
-- Docker (optional, for containerized deployment) (可选，用于容器化部署)
+1.  **克隆或下载项目**
 
-### Installation (安装)
+2.  **创建并激活 Python 虚拟环境**
+    ```bash
+    # 创建虚拟环境
+    python3 -m venv venv
+    # 激活虚拟环境
+    source venv/bin/activate
+    ```
 
-1. Clone the repository (克隆仓库):
-   ```
-   git clone <repository-url>
-   cd tixing
-   ```
+3.  **安装依赖**
+    ```bash
+    pip install -r requirements.txt
+    ```
 
-2. Create a virtual environment and activate it (创建虚拟环境并激活):
-   ```
-   python -m venv venv
-   source venv/bin/activate  # On Windows, use `venv\Scripts\activate` (在Windows上使用 `venv\Scripts\activate`)
-   ```
+4.  **运行应用**
+    ```bash
+    python app.py
+    ```
 
-3. Install the required Python packages (安装所需的Python包):
-   ```
-   pip install -r requirements.txt
-   ```
+5.  **访问应用**
+    在浏览器中打开 `http://localhost:5009`。初始登录密码为 `unimedia`。
 
-4. Configure email settings (配置邮件设置):
-   - Update `email_config_api.py` with your email SMTP settings (使用您的邮件SMTP设置更新 `email_config_api.py`)
-   - Or create a `config.json` file with your email credentials (或创建一个包含您邮件凭证的 `config.json` 文件)
+## Docker 部署指南
 
-### Running the Application (运行应用)
+使用 Docker 是推荐的部署方式，它可以保证环境的一致性。
 
-1. Start the Python backend (启动Python后端):
-   ```
-   python app.py
-   ```
+1.  **构建 Docker 镜像**
+    ```bash
+    # 在您当前的平台上构建
+    docker build -t reminder-app .
+    ```
+    如果您需要在与您电脑 CPU 架构不同的机器上（例如，在 ARM 架构的 Mac 上为 x86_64 架构的群晖 NAS 构建）运行，请使用以下命令进行交叉编译：
+    ```bash
+    # 为 x86_64/amd64 平台构建
+    docker buildx build --platform linux/amd64 -t reminder-app-amd64 . --load
+    ```
 
-2. Open `index.html` in your browser to access the web interface (在浏览器中打开 `index.html` 访问Web界面)
+2.  **运行 Docker 容器**
+    ```bash
+    docker run -d -p 5009:5009 -v "$(pwd)/reminders.db":/app/reminders.db --name reminder-container reminder-app
+    ```
+    **重要**: `-v "$(pwd)/reminders.db":/app/reminders.db` 这部分命令将您本地的数据库文件挂载到容器中，**确保数据持久化**。如果您在群晖等其他平台上运行，请确保将左侧的路径替换为您实际存放 `reminders.db` 文件的路径。
 
-### Running with Docker (使用Docker运行)
+3.  **访问应用**
+    在浏览器中打开 `http://<您的服务器IP>:5009`。
 
-1. Build the Docker image (构建Docker镜像):
-   ```
-   docker build -t reminder-app .
-   ```
+---
 
-2. Run the container (运行容器):
-   ```
-   docker run -p 8000:8000 reminder-app
-   ```
+# English Version
 
-## Usage (使用方法)
+This is a simple and practical web application for tracking and managing the expiration dates of various certificates and licenses, sending automatic reminders via email and DingTalk.
 
-1. Open the web interface in your browser (在浏览器中打开Web界面)
-2. Add new reminders with dates and descriptions (添加带日期和描述的新提醒)
-3. The application will send email notifications before the reminder time (应用将在提醒时间前发送邮件通知)
-4. View and manage existing reminders through the interface (通过界面查看和管理现有提醒)
+## Features
 
-## Configuration (配置)
+- **Web Interface**: Easily add, edit, delete, and view all reminder items through a browser.
+- **Automatic Reminders**: Automatically determines and sends expiration reminders based on the advance days you set.
+- **Multi-channel Notifications**:
+    - **Email**: Supports sending reminder emails to multiple recipients in bulk.
+    - **DingTalk**: Supports sending reminders using a DingTalk group robot with a signature key.
+- **Data Management**:
+    - Supports bulk data import from a CSV file.
+    - Supports exporting all data to a CSV file for easy backup and migration.
+- **Security & Configuration**:
+    - Provides simple password protection for the login.
+    - All configurations (Email, DingTalk, Password) can be done through the web interface.
+- **Docker Support**: Comes with a Dockerfile for quick, cross-platform packaging and deployment.
 
-- Email settings can be configured in `email_config_api.py` (邮件设置可以在 `email_config_api.py` 中配置)
-- Database location is managed in `reminders.db` (数据库位置在 `reminders.db` 中管理)
-- Service configuration in `com.reminder.service.plist` (服务配置在 `com.reminder.service.plist` 中)
+## Tech Stack
 
-## Project Structure (项目结构)
+- **Backend**: Python, Flask
+- **Frontend**: HTML, CSS, JavaScript, Bootstrap 5
+- **Database**: SQLite
 
-- `app.py` - Main Python application (主Python应用)
-- `app.js` - Client-side JavaScript (客户端JavaScript)
-- `index.html` - Main interface (主界面)
-- `email_utils.py` - Email sending functionality (邮件发送功能)
-- `send_reminders.py` - Scheduled reminder sending (定时提醒发送)
-- `reminders.db` - SQLite database file (SQLite数据库文件)
+## Getting Started (Local Development)
 
-## Contributing (贡献)
+1.  **Clone or download the project.**
 
-1. Fork the repository (派生仓库)
-2. Create a feature branch (创建功能分支)
-3. Commit your changes (提交更改)
-4. Push to the branch (推送到分支)
-5. Create a pull request (创建拉取请求)
+2.  **Create and activate a Python virtual environment.**
+    ```bash
+    # Create virtual environment
+    python3 -m venv venv
+    # Activate virtual environment
+    source venv/bin/activate
+    ```
 
-## License (许可证)
+3.  **Install dependencies.**
+    ```bash
+    pip install -r requirements.txt
+    ```
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+4.  **Run the application.**
+    ```bash
+    python app.py
+    ```
 
-本项目采用MIT许可证 - 详情请见LICENSE文件。
+5.  **Access the application.**
+    Open `http://localhost:5009` in your browser. The initial password is `unimedia`.
+
+## Docker Deployment Guide
+
+Using Docker is the recommended way to deploy this application as it ensures a consistent environment.
+
+1.  **Build the Docker Image.**
+    ```bash
+    # Build for your current platform
+    docker build -t reminder-app .
+    ```
+    If you need to run the container on a machine with a different CPU architecture (e.g., building for an x86_64 Synology NAS on an ARM-based Mac), use the following command for cross-compilation:
+    ```bash
+    # Build for the x86_64/amd64 platform
+    docker buildx build --platform linux/amd64 -t reminder-app-amd64 . --load
+    ```
+
+2.  **Run the Docker Container.**
+    ```bash
+    docker run -d -p 5009:5009 -v "$(pwd)/reminders.db":/app/reminders.db --name reminder-container reminder-app
+    ```
+    **Important**: The `-v "$(pwd)/reminders.db":/app/reminders.db` part mounts your local database file into the container, **ensuring data persistence**. If you are running this on another platform like Synology, make sure to replace the path on the left with the actual path to your `reminders.db` file.
+
+3.  **Access the application.**
+    Open `http://<Your-Server-IP>:5009` in your browser.
